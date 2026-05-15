@@ -20,6 +20,111 @@ FEATURES = [
     'restecg', 'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal'
 ]
 
+def calculate_risk_level(patient_data):
+    """Calculate a stable risk level from patient metrics."""
+    score = 0
+    risk_factors = []
+
+    age = patient_data['age']
+    trestbps = patient_data['trestbps']
+    chol = patient_data['chol']
+    thalach = patient_data['thalach']
+    oldpeak = patient_data['oldpeak']
+
+    if age >= 60:
+        score += 2
+        risk_factors.append('age 60 or older')
+    elif age >= 45:
+        score += 1
+        risk_factors.append('middle-age risk group')
+
+    if patient_data['sex'] == 1:
+        score += 1
+        risk_factors.append('male sex')
+
+    if patient_data['cp'] == 3:
+        score += 3
+        risk_factors.append('asymptomatic chest pain pattern')
+    elif patient_data['cp'] == 2:
+        score += 2
+        risk_factors.append('non-anginal chest pain')
+    elif patient_data['cp'] == 1:
+        score += 1
+        risk_factors.append('atypical angina')
+
+    if trestbps >= 160:
+        score += 2
+        risk_factors.append('very high resting blood pressure')
+    elif trestbps >= 140:
+        score += 1
+        risk_factors.append('elevated resting blood pressure')
+
+    if chol >= 280:
+        score += 2
+        risk_factors.append('very high cholesterol')
+    elif chol >= 240:
+        score += 1
+        risk_factors.append('high cholesterol')
+
+    if patient_data['fbs'] == 1:
+        score += 1
+        risk_factors.append('fasting blood sugar above 120 mg/dl')
+
+    if patient_data['restecg'] == 2:
+        score += 2
+        risk_factors.append('left ventricular hypertrophy ECG finding')
+    elif patient_data['restecg'] == 1:
+        score += 1
+        risk_factors.append('ST-T ECG abnormality')
+
+    if thalach < 120:
+        score += 2
+        risk_factors.append('low maximum heart rate')
+    elif thalach < 150:
+        score += 1
+        risk_factors.append('reduced maximum heart rate')
+
+    if patient_data['exang'] == 1:
+        score += 2
+        risk_factors.append('exercise-induced angina')
+
+    if oldpeak >= 2.5:
+        score += 2
+        risk_factors.append('significant ST depression')
+    elif oldpeak >= 1:
+        score += 1
+        risk_factors.append('mild ST depression')
+
+    if patient_data['slope'] == 2:
+        score += 2
+        risk_factors.append('downsloping ST segment')
+    elif patient_data['slope'] == 1:
+        score += 1
+        risk_factors.append('flat ST segment')
+
+    if patient_data['ca'] >= 2:
+        score += 2
+        risk_factors.append('multiple major vessels involved')
+    elif patient_data['ca'] == 1:
+        score += 1
+        risk_factors.append('one major vessel involved')
+
+    if patient_data['thal'] == 2:
+        score += 2
+        risk_factors.append('reversible thalassemia defect')
+    elif patient_data['thal'] == 1:
+        score += 1
+        risk_factors.append('fixed thalassemia defect')
+
+    if score >= 10:
+        risk_level = 'HIGH'
+    elif score >= 5:
+        risk_level = 'MODERATE'
+    else:
+        risk_level = 'LOW'
+
+    return risk_level, score, risk_factors
+
 def query_genai_model(prompt):
     """Query Google Gemini AI model"""
     if not genai_available:
@@ -40,11 +145,15 @@ def query_genai_model(prompt):
 
 def generate_genai_analysis(patient_data):
     """Generate heart disease risk analysis using Google Gemini"""
+    risk_level, risk_score, risk_factors = calculate_risk_level(patient_data)
+    risk_factor_text = ', '.join(risk_factors) if risk_factors else 'no major risk factors from rule-based screening'
+
     prompt = f"""You are a medical AI assistant. Analyze the following patient health data and provide:
-1. A brief cardiovascular risk assessment (HIGH/MODERATE/LOW)
+1. A brief cardiovascular risk assessment. Use this exact risk level: {risk_level}
 2. Key risk factors identified
 3. Recommendations for the patient
 4. A confidence level (0-100%)
+5. A short note that this is educational guidance, not a diagnosis
 
 Patient Data:
 - Age: {patient_data['age']} years
@@ -61,7 +170,12 @@ Patient Data:
 - Major Vessels Colored: {int(patient_data['ca'])}
 - Thalassemia: {["Normal", "Fixed Defect", "Reversible Defect", "Unknown"][int(patient_data['thal'])]}
 
-Provide concise medical-grade analysis with clear sections."""
+Rule-based screening result:
+- Risk Level: {risk_level}
+- Risk Score: {risk_score}
+- Main Risk Factors: {risk_factor_text}
+
+Provide concise medical-grade analysis with clear sections. Do not change the risk level."""
     
     return query_genai_model(prompt)
 
@@ -81,19 +195,14 @@ def predict():
                 return jsonify({'error': f'Missing field: {feature}'}), 400
             patient_data[feature] = float(data[feature])
         
-        # Generate GenAI analysis
+        risk_level, risk_score, risk_factors = calculate_risk_level(patient_data)
         analysis = generate_genai_analysis(patient_data)
-        
-        # Parse risk level from analysis
-        risk_level = 'MODERATE'
-        if 'high' in analysis.lower() and 'high risk' in analysis.lower():
-            risk_level = 'HIGH'
-        elif 'low' in analysis.lower() and 'low risk' in analysis.lower():
-            risk_level = 'LOW'
         
         return jsonify({
             'analysis': analysis,
             'risk_level': risk_level,
+            'risk_score': risk_score,
+            'risk_factors': risk_factors,
             'model': f'GenAI ({MODEL_NAME})',
             'status': 'success'
         })
@@ -103,7 +212,6 @@ def predict():
 @app.route('/health', methods=['GET'])
 def health():
     """Check if Google Gemini API is available"""
-    print(f"DEBUG: GEMINI_API_KEY = {GEMINI_API_KEY}")
     print(f"DEBUG: genai_available = {genai_available}")
     
     if not GEMINI_API_KEY:

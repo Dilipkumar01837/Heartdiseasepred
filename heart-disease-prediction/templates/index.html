@@ -185,6 +185,18 @@
     border-left: 3px solid var(--purple);
   }
 
+  .risk-details {
+    margin-bottom: 12px;
+    padding: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .risk-details strong { color: var(--text); }
+
   .feature-hint {
     margin-top: 10px; padding: 12px 14px; border-radius: 8px;
     background: rgba(168,85,247,.05); border: 1px solid rgba(168,85,247,.15);
@@ -362,6 +374,7 @@
           </div>
         </div>
         <div class="result-body">
+          <div class="risk-details" id="risk-details"></div>
           <div class="analysis-text" id="analysis-text"></div>
         </div>
       </div>
@@ -427,6 +440,7 @@ async function predict() {
     const header = document.getElementById('result-header');
     const icon = document.getElementById('result-icon');
     const label = document.getElementById('result-label');
+    const riskDetails = document.getElementById('risk-details');
     const analysisText = document.getElementById('analysis-text');
 
     const risk = data.risk_level.toLowerCase();
@@ -444,6 +458,10 @@ async function predict() {
       label.textContent = 'LOW RISK';
     }
 
+    const factors = data.risk_factors && data.risk_factors.length
+      ? data.risk_factors.join(', ')
+      : 'No major rule-based risk factors detected';
+    riskDetails.innerHTML = '<strong>Risk Score:</strong> ' + data.risk_score + ' &nbsp; <strong>Factors:</strong> ' + factors;
     analysisText.textContent = data.analysis;
     box.classList.add('show');
     box.style.display = 'block';
